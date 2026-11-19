@@ -1,42 +1,13 @@
-# Canali Italia – Addon Stremio
-
-Addon Stremio per la riproduzione dei canali TV italiani tramite playlist M3U.
-
-## Struttura
-
-- `server.js` – server e logica dell'addon Stremio.
-- `package.json` – metadati, comando di avvio e dipendenze Node.js.
-- `data/italy.m3u` – playlist dei canali.
-- `docs/README.md` – documentazione del progetto.
-
-## Avvio
-
-Richiede Node.js.
-
-```bash
-npm install
-npm start
-```
-
-Per Render, mantenere il comando di avvio `npm start`. Il server usa la porta
-fornita dalla variabile d'ambiente `PORT` (con fallback locale a `7000`).
-
-## Playlist
-
-Per impostazione predefinita il server scarica la playlist da:
-
-`https://raw.githubusercontent.com/diegolasvegas1985-cmd/Canali-Italia/refs/heads/main/data/italy.m3u`
-
-È possibile sovrascrivere l'indirizzo impostando la variabile d'ambiente
-`M3U_URL`.
-
-## Aggiornare i canali
-
-Modificare `data/italy.m3u` mantenendo il formato M3U e pubblicare le modifiche
-sul branch `main`. Il server continuerà a leggere la playlist dall'indirizzo
-predefinito indicato sopra.
-
-## Note
-
-La riorganizzazione non modifica i contenuti della playlist né la logica
-dell'addon, salvo l'aggiornamento del percorso remoto della playlist.
+Guida.Tv – Addon Stremio con EPG
+Addon Stremio per i canali presenti nella playlist M3U, con recupero della programmazione XMLTV.
+Configurazione predefinita
+Playlist: repository GitHub Guida.Tv, file italy.m3u
+EPG: epgshare01 Italia IT1 (epg_ripper_IT1.xml.gz)
+Cache playlist: 10 minuti
+Cache EPG: 30 minuti
+Variabili facoltative:
+M3U_URL: URL alternativo della playlist
+EPG_URL: URL alternativo XMLTV/XMLTV.GZ
+La corrispondenza primaria avviene tramite tvg-id esatto; è previsto un ripiego sul nome normalizzato esatto. I canali senza corrispondenza mostrano la guida come non disponibile, senza inventare programmi.
+Render
+Build Command: npm install Start Command: npm start Root Directory: vuoto

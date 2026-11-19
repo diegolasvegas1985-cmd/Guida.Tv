@@ -3,7 +3,7 @@ const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const axios = require('axios');
 
 const M3U_URL = process.env.M3U_URL ||
-    ''https://raw.githubusercontent.com/diegolasvegas1985-cmd/Guida.Tv/refs/heads/main/italy.m3u';
+    'https://raw.githubusercontent.com/diegolasvegas1985-cmd/Guida.Tv/refs/heads/main/italy.m3u';
 
 const BASE_ID = 'tv_italia_fast_container';
 

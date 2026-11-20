@@ -29,7 +29,7 @@ const xmlParser = new XMLParser({
 
 const builder = new addonBuilder({
     id: 'org.diegolasvegas.tvitalia.fast.color',
-    version: '3.3.0',
+    version: '3.3.1',
     name: 'TV Italia Live - Guida TV',
     description: 'Canali TV italiani con programma in onda, prossimo programma e zapping rapido',
     resources: ['catalog', 'meta', 'stream'],
@@ -55,19 +55,24 @@ function nodeText(value) {
 
 function parseXmltvDate(value) {
     if (!value) return null;
+
     const match = String(value).match(
         /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?:\s*([+-])(\d{2})(\d{2}))?/
     );
+
     if (!match) return null;
 
     const [, y, mo, d, h, mi, s, sign, offsetH, offsetM] = match;
+
     const utc = Date.UTC(
         Number(y), Number(mo) - 1, Number(d),
         Number(h), Number(mi), Number(s)
     );
 
     if (!sign) return new Date(utc);
+
     const offset = (Number(offsetH) * 60 + Number(offsetM)) * 60000;
+
     return new Date(utc - (sign === '+' ? offset : -offset));
 }
 
@@ -120,6 +125,7 @@ async function parseM3U() {
             data: channels,
             expires: Date.now() + CACHE_TTL
         };
+
         return channels;
     } catch (error) {
         console.error('Errore download M3U:', error.message);
@@ -140,6 +146,7 @@ async function loadEpg() {
         });
 
         let buffer = Buffer.from(response.data);
+
         if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) {
             buffer = gunzipSync(buffer);
         }
@@ -147,24 +154,30 @@ async function loadEpg() {
         const xml = buffer.toString('utf8');
         const parsed = xmlParser.parse(xml);
         const tv = parsed.tv || {};
+
         const channelNodes = asArray(tv.channel);
         const programmeNodes = asArray(tv.programme);
 
         const channelNames = new Map();
+
         for (const item of channelNodes) {
             const id = item['@_id'];
             if (!id) continue;
+
             const displayNames = asArray(item['display-name'])
                 .map(nodeText)
                 .filter(Boolean);
+
             channelNames.set(id, displayNames);
         }
 
         const programmes = new Map();
+
         for (const item of programmeNodes) {
             const channelId = item['@_channel'];
             const start = parseXmltvDate(item['@_start']);
             const stop = parseXmltvDate(item['@_stop']);
+
             if (!channelId || !start || !stop) continue;
 
             const entry = {
@@ -173,9 +186,13 @@ async function loadEpg() {
                 title: nodeText(item.title),
                 description: nodeText(item.desc)
             };
+
             if (!entry.title) continue;
 
-            if (!programmes.has(channelId)) programmes.set(channelId, []);
+            if (!programmes.has(channelId)) {
+                programmes.set(channelId, []);
+            }
+
             programmes.get(channelId).push(entry);
         }
 
@@ -184,6 +201,7 @@ async function loadEpg() {
         }
 
         const data = { channelNames, programmes };
+
         epgCache = {
             data,
             expires: Date.now() + EPG_CACHE_TTL
@@ -193,10 +211,16 @@ async function loadEpg() {
             `EPG caricata: ${channelNames.size} canali, ` +
             `${programmeNodes.length} programmi XMLTV`
         );
+
         return data;
+
     } catch (error) {
         console.error('Errore download/parsing EPG:', error.message);
-        return epgCache.data || { channelNames: new Map(), programmes: new Map() };
+
+        return epgCache.data || {
+            channelNames: new Map(),
+            programmes: new Map()
+        };
     }
 }
 
@@ -205,27 +229,38 @@ function findEpgId(channel, epg) {
         return channel.tvgId;
     }
 
-    // Ripiego prudente: corrispondenza esatta del nome normalizzato.
-    // Non usa corrispondenze parziali per evitare di confondere canali simili.
     const wanted = normalizeName(channel.name);
     if (!wanted) return null;
 
     for (const [id, names] of epg.channelNames.entries()) {
-        if (names.some(name => normalizeName(name) === wanted) &&
-            epg.programmes.has(id)) {
+        if (
+            names.some(name => normalizeName(name) === wanted) &&
+            epg.programmes.has(id)
+        ) {
             return id;
         }
     }
+
     return null;
 }
 
 function getNowAndNext(channel, epg, now = new Date()) {
     const epgId = findEpgId(channel, epg);
-    if (!epgId) return { current: null, next: null };
+
+    if (!epgId) {
+        return { current: null, next: null };
+    }
 
     const list = epg.programmes.get(epgId) || [];
-    const current = list.find(p => p.start <= now && p.stop > now) || null;
-    const next = list.find(p => p.start > now) || null;
+
+    const current = list.find(
+        p => p.start <= now && p.stop > now
+    ) || null;
+
+    const next = list.find(
+        p => p.start > now
+    ) || null;
+
     return { current, next };
 }
 
@@ -238,48 +273,82 @@ function formatTime(date) {
 }
 
 function programmeLine(label, programme) {
-    if (!programme) return `${label}: non disponibile`;
+    if (!programme) {
+        return `${label}: non disponibile`;
+    }
+
     return `${label} ${formatTime(programme.start)}-${formatTime(programme.stop)}: ${programme.title}`;
 }
 
 function channelDescription(channel, epg) {
     const { current, next } = getNowAndNext(channel, epg);
+
     const lines = [
         'TV Italia Live - Zapping rapido',
         programmeLine('IN ONDA', current),
         programmeLine('A SEGUIRE', next)
     ];
+
     if (current && current.description) {
         lines.push('', current.description);
     }
+
     return lines.join('\n');
 }
 
-// CATALOGO: una scheda per ogni canale, con il programma in onda.
+// Nome del canale con il programma attualmente in onda.
+function channelDisplayName(channel, epg) {
+    const { current } = getNowAndNext(channel, epg);
+
+    if (!current) {
+        return channel.name;
+    }
+
+    return `${channel.name} | ${formatTime(current.start)}-${formatTime(current.stop)} ${current.title}`;
+}
+
+// CATALOGO: mostra il programma direttamente nel nome della scheda.
 builder.defineCatalogHandler(async (args) => {
     if (args.type === 'series' && args.id === 'tv_italia_catalog_fast') {
-        const [channels, epg] = await Promise.all([parseM3U(), loadEpg()]);
-        const matchedCount = channels.filter(ch => findEpgId(ch, epg)).length;
-        console.log(`EPG collegata a ${matchedCount}/${channels.length} canali della playlist`);
+        const [channels, epg] = await Promise.all([
+            parseM3U(),
+            loadEpg()
+        ]);
+
+        const matchedCount = channels.filter(
+            ch => findEpgId(ch, epg)
+        ).length;
+
+        console.log(
+            `EPG collegata a ${matchedCount}/${channels.length} canali della playlist`
+        );
 
         return {
             metas: channels.map((ch, index) => ({
                 id: `${BASE_ID}:${index + 1}`,
                 type: 'series',
-                name: ch.name,
+                name: channelDisplayName(ch, epg),
                 poster: ch.logo || FALLBACK_POSTER,
                 posterShape: 'landscape',
                 description: channelDescription(ch, epg)
             }))
         };
     }
+
     return { metas: [] };
 });
 
-// DETTAGLIO: il canale selezionato resta il primo; gli altri servono per lo zapping.
+// DETTAGLIO: mantiene il canale selezionato per primo e lo zapping.
 builder.defineMetaHandler(async (args) => {
-    if (args.type === 'series' && args.id.startsWith(BASE_ID + ':')) {
-        const [channels, epg] = await Promise.all([parseM3U(), loadEpg()]);
+    if (
+        args.type === 'series' &&
+        args.id.startsWith(BASE_ID + ':')
+    ) {
+        const [channels, epg] = await Promise.all([
+            parseM3U(),
+            loadEpg()
+        ]);
+
         const selectedIndex = parseInt(args.id.split(':')[1], 10) - 1;
 
         if (selectedIndex < 0 || selectedIndex >= channels.length) {
@@ -294,6 +363,7 @@ builder.defineMetaHandler(async (args) => {
         const videos = orderedChannels.map((ch, order) => {
             const originalIndex = channels.indexOf(ch);
             const number = String(originalIndex + 1).padStart(2, '0');
+
             const { current } = getNowAndNext(ch, epg);
             const suffix = current ? ` | ${current.title}` : '';
 
@@ -308,25 +378,29 @@ builder.defineMetaHandler(async (args) => {
             };
         });
 
+        const selectedChannel = channels[selectedIndex];
+
         return {
             meta: {
                 id: args.id,
                 type: 'series',
-                name: channels[selectedIndex].name,
-                poster: channels[selectedIndex].logo || FALLBACK_POSTER,
-                description: channelDescription(channels[selectedIndex], epg) +
+                name: channelDisplayName(selectedChannel, epg),
+                poster: selectedChannel.logo || FALLBACK_POSTER,
+                description: channelDescription(selectedChannel, epg) +
                     '\n\nSeleziona un canale e usa il menu laterale del player per fare zapping.',
                 videos
             }
         };
     }
+
     return { meta: null };
 });
 
-// STREAM: URL e comportamento di zapping restano invariati.
+// STREAM: URL e comportamento di zapping invariati.
 builder.defineStreamHandler(async (args) => {
     if (args.type === 'series') {
         const parts = args.id.split(':');
+
         if (parts.length === 4 && parts[0] === BASE_ID) {
             const channelIndex = parseInt(parts[3], 10) - 1;
             const channels = await parseM3U();
@@ -337,15 +411,17 @@ builder.defineStreamHandler(async (args) => {
                     streams: [{
                         title: `Diretta - ${channel.name}`,
                         url: channel.url,
-                        behaviorHints: { notWebReady: true }
+                        behaviorHints: {
+                            notWebReady: true
+                        }
                     }]
                 };
             }
         }
     }
+
     return { streams: [] };
 });
 
 const port = process.env.PORT || 7000;
 serveHTTP(builder.getInterface(), { port });
-                                                       
